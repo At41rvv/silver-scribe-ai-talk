@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Send, Bot, User, Settings } from 'lucide-react';
+import { useAuth } from '@/components/AuthProvider';
+import SettingsPage from '@/components/SettingsPage';
+import TypewriterEffect from '@/components/TypewriterEffect';
+import logo from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,7 +32,10 @@ export default function ChatInterface() {
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] = useState(MODELS[0].value);
   const [isLoading, setIsLoading] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [animatingMessageId, setAnimatingMessageId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
@@ -76,6 +83,7 @@ export default function ChatInterface() {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      setAnimatingMessageId(assistantMessage.id);
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -95,13 +103,24 @@ export default function ChatInterface() {
     }
   };
 
+  if (showSettings) {
+    return <SettingsPage onBack={() => setShowSettings(false)} />;
+  }
+
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <div className="w-64 bg-chat-sidebar-bg border-r border-border p-4">
-        <div className="flex items-center gap-2 mb-6">
-          <Bot className="w-6 h-6 text-primary" />
-          <h1 className="text-lg font-semibold text-foreground">AI Chat</h1>
+        <div className="flex items-center gap-3 mb-6">
+          <img src={logo} alt="Sonar AI" className="w-8 h-8 rounded-full" />
+          <div>
+            <h1 className="text-lg font-semibold text-foreground">Sonar AI</h1>
+            {user && (
+              <p className="text-xs text-muted-foreground">
+                {user.displayName || user.email}
+              </p>
+            )}
+          </div>
         </div>
         
         <div className="space-y-4">
@@ -123,14 +142,25 @@ export default function ChatInterface() {
             </Select>
           </div>
           
-          <Button 
-            variant="outline" 
-            className="w-full justify-start" 
-            onClick={() => setMessages([])}
-          >
-            <Settings className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
+          <div className="space-y-2">
+            <Button 
+              variant="outline" 
+              className="w-full justify-start" 
+              onClick={() => setMessages([])}
+            >
+              <Bot className="w-4 h-4 mr-2" />
+              New Chat
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              className="w-full justify-start" 
+              onClick={() => setShowSettings(true)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              {user ? 'Account Settings' : 'Sign In'}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -141,9 +171,19 @@ export default function ChatInterface() {
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground py-12">
-                <Bot className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
-                <h2 className="text-xl font-medium mb-2">Start a conversation</h2>
+                <img src={logo} alt="Sonar AI" className="w-16 h-16 mx-auto mb-4 opacity-50 rounded-full" />
+                <h2 className="text-xl font-medium mb-2">Welcome to Sonar AI</h2>
                 <p>Ask me anything, and I'll do my best to help!</p>
+                {!user && (
+                  <p className="text-sm mt-2">
+                    <button 
+                      onClick={() => setShowSettings(true)}
+                      className="text-primary hover:underline"
+                    >
+                      Sign in
+                    </button> to save your chat history
+                  </p>
+                )}
               </div>
             )}
             
@@ -165,7 +205,17 @@ export default function ChatInterface() {
                       : 'bg-chat-assistant-bg text-chat-assistant-fg border border-border'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                  <div className="whitespace-pre-wrap break-words">
+                    {message.role === 'assistant' && animatingMessageId === message.id ? (
+                      <TypewriterEffect 
+                        text={message.content} 
+                        speed={20}
+                        onComplete={() => setAnimatingMessageId(null)}
+                      />
+                    ) : (
+                      message.content
+                    )}
+                  </div>
                   <div className="text-xs opacity-60 mt-1">
                     {message.timestamp.toLocaleTimeString()}
                   </div>
